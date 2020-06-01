@@ -1,0 +1,37 @@
+FROM adoptopenjdk/openjdk11:x86_64-alpine-jdk-11.0.7_10 as builder
+
+MAINTAINER Stephane Martin stephane@stephanemartin.fr
+
+ENV TOMCAT_MAJOR=9 \
+    TOMCAT_VERSION=9.0.35
+
+RUN apk add --no-cache git maven curl
+
+RUN addgroup -S jpetstore && adduser -S jpetstore -G jpetstore
+
+USER jpetstore
+WORKDIR /home/jpetstore
+RUN git clone https://github.com/mybatis/jpetstore-6.git && cd jpetstore-6 && ./mvnw clean package 
+
+RUN curl -kL http://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz | tar -xz
+RUN mv apache-tomcat-* tomcat \
+	&& rm -rf tomcat/webapps/* \
+	&& mv /home/jpetstore/jpetstore-6/target/jpetstore.war tomcat/webapps/ROOT.war
+
+FROM adoptopenjdk/openjdk11:x86_64-alpine-jre-11.0.7_10
+ENV TOMCAT_HOME=/home/jpetstore/tomcat \
+    CATALINA_HOME=/home/jpetstore/tomcat \
+    CATALINA_OUT=/dev/null
+
+RUN addgroup -S jpetstore && adduser -S jpetstore -G jpetstore
+USER jpetstore
+WORKDIR /home/jpetstore
+
+COPY --chown=jpetstore:jpetstore --from=BUILDER ${TOMCAT_HOME} ${TOMCAT_HOME}
+
+EXPOSE 8080
+CMD "${TOMCAT_HOME}/bin/catalina.sh" "run"
+
+
+
+
